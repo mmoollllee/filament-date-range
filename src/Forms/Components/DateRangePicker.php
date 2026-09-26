@@ -7,6 +7,7 @@ use Carbon\CarbonInterface;
 use Closure;
 use CodeWithKyrian\FilamentDateRange\Forms\Components\Concerns\HasStartEndAffixes;
 use CodeWithKyrian\FilamentDateRange\Forms\Components\StateCasts\DateRangeStateCast;
+use CodeWithKyrian\FilamentDateRange\Forms\Components\StateCasts\DateStateCast;
 use Filament\Forms\Components\Concerns\CanBeReadOnly;
 use Filament\Forms\Components\Field;
 use Filament\Support\Concerns\HasExtraAlpineAttributes;
@@ -47,6 +48,8 @@ class DateRangePicker extends Field
     protected bool|Closure $dualCalendar = true;
 
     protected bool|Closure $singleField = false;
+
+    protected bool|Closure $singleDate = false;
 
     protected array|bool|Closure|null $stacked = null;
 
@@ -94,7 +97,7 @@ class DateRangePicker extends Field
     {
         return [
             ...parent::getDefaultStateCasts(),
-            app(DateRangeStateCast::class, [
+            app($this->isSingleDate() ? DateStateCast::class : DateRangeStateCast::class, [
                 'format' => $this->getFormat(),
                 'internalFormat' => $this->getInternalFormat(),
                 'timezone' => $this->getTimezone(),
@@ -251,6 +254,17 @@ class DateRangePicker extends Field
     public function singleField(bool|Closure $condition = true): static
     {
         $this->singleField = $condition;
+
+        return $this;
+    }
+
+    /**
+     * Picks a single date instead of a range — with the same calendar,
+     * typeable input and formats. The state is one date string.
+     */
+    public function singleDate(bool|Closure $condition = true): static
+    {
+        $this->singleDate = $condition;
 
         return $this;
     }
@@ -437,6 +451,10 @@ class DateRangePicker extends Field
 
     public function shouldShowPresets(): bool
     {
+        if ($this->isSingleDate()) {
+            return false;
+        }
+
         $presets = $this->evaluate($this->presets);
 
         if ($presets === false || $presets === null) {
@@ -458,7 +476,7 @@ class DateRangePicker extends Field
     {
         $presets = $this->evaluate($this->presets);
 
-        if ($presets === false || $presets === null) {
+        if ($presets === false || $presets === null || $this->isSingleDate()) {
             return [];
         }
 
@@ -544,7 +562,13 @@ class DateRangePicker extends Field
 
     public function getStartPlaceholder(): ?string
     {
-        return $this->evaluate($this->startPlaceholder) ?? __('filament-date-range::picker.placeholders.start_date', locale: $this->getLocale());
+        $placeholder = $this->evaluate($this->startPlaceholder);
+
+        if ($placeholder !== null || $this->isSingleDate()) {
+            return $placeholder;
+        }
+
+        return __('filament-date-range::picker.placeholders.start_date', locale: $this->getLocale());
     }
 
     public function getEndPlaceholder(): ?string
@@ -567,7 +591,7 @@ class DateRangePicker extends Field
 
     public function shouldDisplayDualCalendar(): bool
     {
-        return $this->evaluate($this->dualCalendar);
+        return ! $this->isSingleDate() && $this->evaluate($this->dualCalendar);
     }
 
     public function isInline(): bool
@@ -661,7 +685,12 @@ class DateRangePicker extends Field
 
     public function isSingleField(): bool
     {
-        return $this->evaluate($this->singleField);
+        return $this->isSingleDate() || $this->evaluate($this->singleField);
+    }
+
+    public function isSingleDate(): bool
+    {
+        return (bool) $this->evaluate($this->singleDate);
     }
 
     public function hasTime(): bool
@@ -722,7 +751,8 @@ class DateRangePicker extends Field
 
         $statePath = $this->getStatePath();
 
-        if (! $this->isRequired()) {
+        // A single date is a plain string: the required rule is enough.
+        if (! $this->isRequired() || $this->isSingleDate()) {
             return;
         }
 
