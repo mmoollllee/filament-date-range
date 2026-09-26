@@ -50,6 +50,7 @@
             isDisabled: @js($isDisabled()),
             enabledDates: @js($getEnabledDates()),
             singleField: @js($isSingleField),
+            singleDate: @js($isSingleDate()),
             timeEnabled: @js($timeEnabled),
             allDayEnabled: @js($allDayEnabled),
             allDayInference: @js($allDayInference),
@@ -66,7 +67,7 @@
             @if ($isSingleField)
                 <x-filament::input.wrapper :disabled="$isDisabled()" :inline-prefix="$isStartPrefixInline()" :inline-suffix="$isStartSuffixInline()" :prefix="$getStartPrefixLabel()"
                     :prefix-actions="$getStartPrefixActions()" :prefix-icon="$getStartPrefixIcon()" :prefix-icon-color="$getStartPrefixIconColor()" :suffix="$getStartSuffixLabel()" :suffix-actions="$getStartSuffixActions()"
-                    :suffix-icon="$getStartSuffixIcon()" :suffix-icon-color="$getStartSuffixIconColor()" :valid="!$errors->has($statePath . '.start') && !$errors->has($statePath . '.end')"
+                    :suffix-icon="$getStartSuffixIcon()" :suffix-icon-color="$getStartSuffixIconColor()" :valid="!$errors->has($statePath) && !$errors->has($statePath . '.start') && !$errors->has($statePath . '.end')"
                     class="fi-fo-date-range-picker-single-wrapper">
                     <div class="fi-date-range-picker-input-inner">
                         <input x-ref="singleInput" id="{{ $id }}" type="text" x-model="rangeDisplay"

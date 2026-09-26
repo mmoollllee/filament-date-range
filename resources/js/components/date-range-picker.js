@@ -30,6 +30,7 @@ export default function dateRangePickerFormComponent({
 	dualCalendar = true,
 	enabledDates = null,
 	singleField = false,
+	singleDate = false,
 	timeEnabled = false,
 	allDayEnabled = false,
 	allDayInference = true,
@@ -89,6 +90,7 @@ export default function dateRangePickerFormComponent({
 		enabledDates,
 
 		singleField,
+		singleDate,
 		timeEnabled,
 		allDayEnabled,
 		allDay: true,
@@ -207,6 +209,15 @@ export default function dateRangePickerFormComponent({
 				return [null, null];
 			}
 
+			// Single date mode: the state is one date string; start and end
+			// both hold it, so the calendar marks exactly that day.
+			if (this.singleDate) {
+				const value = typeof currentState === 'object' ? currentState.start : currentState;
+				const date = value ? this.parseStateDate(value, false) : null;
+
+				return date?.isValid() ? [date, date.clone()] : [null, null];
+			}
+
 			let start = currentState.start;
 			let end = currentState.end;
 
@@ -220,6 +231,12 @@ export default function dateRangePickerFormComponent({
 		},
 
 		updateState() {
+			if (this.singleDate) {
+				this.state = this.start ? this.start.format(this.stateFormat) : null;
+
+				return;
+			}
+
 			this.state = {
 				start: this.start?.format(this.stateFormat),
 				end: this.end?.format(this.stateFormat)
@@ -233,8 +250,10 @@ export default function dateRangePickerFormComponent({
 		openCalendar(targetEnd) {
 			if (this.isDisabled || this.isReadOnly) return;
 
-			// In single field mode, intelligently determine which end to focus on
-			if (this.singleField) {
+			if (this.singleDate) {
+				this.activeEnd = 'start';
+			} else if (this.singleField) {
+				// In single field mode, intelligently determine which end to focus on
 				// If we have start but no end, focus on selecting end date
 				if (this.start && !this.end) {
 					this.activeEnd = 'end';
@@ -252,7 +271,7 @@ export default function dateRangePickerFormComponent({
 				this.activeEnd = targetEnd;
 			}
 
-			this.isAwaitingEndDate = (this.activeEnd === 'start' && !this.end) || (this.activeEnd === 'end' && !this.start);
+			this.isAwaitingEndDate = !this.singleDate && ((this.activeEnd === 'start' && !this.end) || (this.activeEnd === 'end' && !this.start));
 			this._clearHover();
 			if (this.hasPresets) {
 				this.activePreset = null;
@@ -460,6 +479,12 @@ export default function dateRangePickerFormComponent({
 
 			this._clearHover();
 
+			if (this.singleDate) {
+				this.selectSingleDate(selectedDate);
+
+				return;
+			}
+
 			let rangeCompleted = false;
 			let shouldSwitchActiveEnd = false;
 
@@ -540,6 +565,31 @@ export default function dateRangePickerFormComponent({
 			}
 		},
 
+		/**
+		 * Single date mode: one click picks the date (keeping a chosen time)
+		 * and closes the calendar.
+		 */
+		selectSingleDate(selectedDate) {
+			let date = selectedDate;
+
+			if (this.timeEnabled && !this.allDay) {
+				date = this.applyTimeToDate(date, this.startTime || '00:00', false);
+			} else {
+				date = date.startOf('day');
+			}
+
+			this.start = date;
+			this.end = date.clone();
+			this.isAwaitingEndDate = false;
+
+			this.updateDisplayValues();
+			this.updateState();
+
+			if (this.autoApply && this.shouldCloseOnSelect) {
+				this.applySelectionAndClose();
+			}
+		},
+
 		previewDay(day, month, year) {
 			const candidateKey = this._cellKey(year, month, day);
 			if (this._isKeyDisabled(candidateKey)) {
@@ -582,7 +632,9 @@ export default function dateRangePickerFormComponent({
 			const startFormatted = this.startDisplay;
 			const endFormatted = this.endDisplay;
 
-			if (this.start && this.end) {
+			if (this.singleDate) {
+				this.rangeDisplay = startFormatted;
+			} else if (this.start && this.end) {
 				this.rangeDisplay = `${startFormatted} — ${endFormatted}`;
 			} else if (this.start) {
 				this.rangeDisplay = startFormatted;
@@ -686,7 +738,9 @@ export default function dateRangePickerFormComponent({
 		handleInputBlur(value, target) {
 			if (!this.editableInputs || this.isDisabled || this.isReadOnly) return;
 
-			if (target === 'range') {
+			if (this.singleDate) {
+				this.handleSingleDateInputBlur(value);
+			} else if (target === 'range') {
 				this.handleRangeInputBlur(value);
 			} else {
 				this.handleSingleInputBlur(value, target);
@@ -722,6 +776,23 @@ export default function dateRangePickerFormComponent({
 					this.start = null;
 				}
 			}
+		},
+
+		handleSingleDateInputBlur(value) {
+			if ((value ?? '').trim() === '') {
+				this.start = null;
+				this.end = null;
+				return;
+			}
+
+			const parsed = this.parseInputValue(value, { shouldEndOfDay: false });
+			if (!parsed) return; // Invalid parse — updateDisplayValues() will revert.
+
+			if (this.minDate && parsed.isBefore(this.minDate, 'day')) return;
+			if (this.maxDate && parsed.isAfter(this.maxDate, 'day')) return;
+
+			this.start = parsed;
+			this.end = parsed.clone();
 		},
 
 		handleRangeInputBlur(value) {

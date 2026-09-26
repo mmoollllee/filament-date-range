@@ -425,6 +425,18 @@ DateRangePicker::make('invoice_period')
 
 ![Single input field displaying the full selected date range.](art/form-field-single-field.png)
 
+#### `singleDate(bool | Closure $condition = true)`
+
+Picks a single date instead of a range — with the same calendar, typeable input (see `editableInputs()`) and formats. The state is one date string (e.g. `2024-01-15`), so the field maps directly to a `date` column:
+
+```php
+DateRangePicker::make('due_on')
+    ->singleDate()
+    ->displayFormat('d.m.Y')
+```
+
+One click picks the date and closes the calendar. Presets and the second calendar are turned off in this mode, and there is no default placeholder — set one with `startPlaceholder()`.
+
 #### `readOnly(bool | Closure $condition = true)`
 
 Makes the input fields read-only, preventing direct text input (selection via calendar is still possible).
