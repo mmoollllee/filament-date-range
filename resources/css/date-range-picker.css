@@ -1,5 +1,4 @@
 @import 'tailwindcss/theme';
-@import 'tailwindcss/utilities';
 
 @custom-variant dark (&:where(.dark, .dark *));
 
@@ -24,7 +23,16 @@
 	--tracking-*: initial;
 }
 
+/*
+ * Tailwind's utilities are not imported: in the host page they would be
+ * unlayered and beat the host's own responsive and dark variants. The
+ * styles below only @apply them, scoped to the picker.
+ */
 .fi-date-range-picker {
+    & .sr-only {
+        @apply sr-only;
+    }
+
     & .fi-date-range-picker-input-container {
         @apply flex;
 
