@@ -1147,6 +1147,10 @@ export default function dateRangePickerFormComponent({
 		},
 
 		isEndDay(day, month, year) {
+			// Single date mode: the end mirrors the start, hover preview included,
+			// so the previous value never stays marked as the end of a range.
+			if (this.singleDate) return this.isStartDay(day, month, year);
+
 			const targetKey = (this.activeEnd === 'end' && this.hoveredEndKey)
 				? this.hoveredEndKey
 				: this.endKey;
@@ -1158,6 +1162,8 @@ export default function dateRangePickerFormComponent({
 		},
 
 		isInRange(day, month, year) {
+			if (this.singleDate) return false;
+
 			const sKey = (this.activeEnd === 'start' && this.hoveredStartKey)
 				? this.hoveredStartKey
 				: this.startKey;
@@ -1175,7 +1181,7 @@ export default function dateRangePickerFormComponent({
 		},
 
 		hasRange() {
-			if (!this.startKey) return false;
+			if (this.singleDate || !this.startKey) return false;
 			if (this.endKey && this.startKey !== this.endKey) return true;
 			if (this.hoveredEndKey && this.startKey !== this.hoveredEndKey) return true;
 			return false;
