@@ -558,6 +558,8 @@ DateRangeFilter::make('processed_at')
 
 The filter, by default, applies a `WHERE column >= start_date AND column <= end_date` condition to your Eloquent query. When time selection is disabled, the `start_date` is taken as the start of the selected day and `end_date` as the end of the selected day. When time selection is enabled, the exact timestamps selected in the picker are used, respecting the configured timezone.
 
+The filter reads its state as the picker does: a start or end that is no date (`2024-13-45`, any other text, sent with a hand-made request) counts as unset, for the query, for the `start` and `end` handed to `modifyQueryUsing()` and for the indicator.
+
 #### `modifyQueryUsing(Closure $callback)`
 
 For more complex filtering logic, you can provide a custom query modification callback.

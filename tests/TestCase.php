@@ -9,6 +9,7 @@ use Filament\Actions\ActionsServiceProvider;
 use Filament\Forms\FormsServiceProvider;
 use Filament\Schemas\SchemasServiceProvider;
 use Filament\Support\SupportServiceProvider;
+use Filament\Tables\TablesServiceProvider;
 use Illuminate\Encryption\Encrypter;
 use Livewire\LivewireServiceProvider;
 use Orchestra\Testbench\TestCase as BaseTestCase;
@@ -27,6 +28,7 @@ class TestCase extends BaseTestCase
             LivewireServiceProvider::class,
             SchemasServiceProvider::class,
             SupportServiceProvider::class,
+            TablesServiceProvider::class,
             DateRangeServiceProvider::class,
         ];
     }
@@ -35,5 +37,13 @@ class TestCase extends BaseTestCase
     {
         // Livewire signs the snapshots of the test components.
         $app['config']->set('app.key', 'base64:' . base64_encode(Encrypter::generateKey('AES-256-CBC')));
+
+        // A table test's records live as long as its test.
+        $app['config']->set('database.default', 'testing');
+        $app['config']->set('database.connections.testing', [
+            'driver' => 'sqlite',
+            'database' => ':memory:',
+            'prefix' => '',
+        ]);
     }
 }

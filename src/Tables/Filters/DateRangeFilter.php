@@ -8,6 +8,7 @@ use Filament\Tables\Filters\BaseFilter;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use CodeWithKyrian\FilamentDateRange\Forms\Components\DateRangePicker;
+use CodeWithKyrian\FilamentDateRange\Forms\Components\StateCasts\DateRangeStateCast;
 
 class DateRangeFilter extends BaseFilter
 {
@@ -66,8 +67,8 @@ class DateRangeFilter extends BaseFilter
         $this->indicateUsing(function (array $data): ?string {
             $state = $data[$this->getName()] ?? null;
 
-            $start = $state['start'] ?? null;
-            $end = $state['end'] ?? null;
+            $start = $this->getBoundDate($state['start'] ?? null)?->translatedFormat($this->getDisplayFormat());
+            $end = $this->getBoundDate($state['end'] ?? null)?->translatedFormat($this->getDisplayFormat());
 
             if (!$start && !$end) {
                 return null;
@@ -76,17 +77,12 @@ class DateRangeFilter extends BaseFilter
             $label = $this->getLabel();
 
             if ($start && !$end) {
-                $start = Carbon::parse($start)->translatedFormat($this->getDisplayFormat());
                 return "{$label}: " . __('filament-date-range::picker.filters.from') . " {$start}";
             }
 
             if (!$start && $end) {
-                $end = Carbon::parse($end)->translatedFormat($this->getDisplayFormat());
                 return "{$label}: " . __('filament-date-range::picker.filters.until') . " {$end}";
             }
-
-            $start = Carbon::parse($start)->translatedFormat($this->getDisplayFormat());
-            $end = Carbon::parse($end)->translatedFormat($this->getDisplayFormat());
 
             return "{$label}: {$start} - {$end}";
         });
@@ -117,19 +113,19 @@ class DateRangeFilter extends BaseFilter
     {
         $state = $data[$this->getName()] ?? null;
 
-        $start = $state['start'] ?? null;
-        $end = $state['end'] ?? null;
+        $start = $this->getBoundDate($state['start'] ?? null);
+        $end = $this->getBoundDate($state['end'] ?? null);
 
         if (!$start && !$end) {
             return $query;
         }
 
         if ($this->hasTime()) {
-            $start = $start ? Carbon::parse($start)->setTimezone($this->getTimezone()) : null;
-            $end = $end ? Carbon::parse($end)->setTimezone($this->getTimezone()) : null;
+            $start = $start?->setTimezone($this->getTimezone());
+            $end = $end?->setTimezone($this->getTimezone());
         } else {
-            $start = $start ? Carbon::parse($start)->setTimezone($this->getTimezone())->startOfDay() : null;
-            $end = $end ? Carbon::parse($end)->setTimezone($this->getTimezone())->endOfDay() : null;
+            $start = $start?->setTimezone($this->getTimezone())->startOfDay();
+            $end = $end?->setTimezone($this->getTimezone())->endOfDay();
         }
 
         $column = $this->getFilterColumnName();
@@ -149,6 +145,22 @@ class DateRangeFilter extends BaseFilter
         return $query
             ->when($start, fn(Builder $query, $date) => $query->where($column, '>=', $date))
             ->when($end, fn(Builder $query, $date) => $query->where($column, '<=', $date));
+    }
+
+    /**
+     * One end of the filter's state as a date, read with the picker's own
+     * parser: null when it holds none, or anything that is no date. The state
+     * arrives as the browser sent it, past the picker's state cast.
+     */
+    protected function getBoundDate(mixed $bound): ?CarbonInterface
+    {
+        return app(DateRangeStateCast::class, [
+            'format' => $this->getFormat(),
+            // The internal format of the filter's picker.
+            'internalFormat' => $this->hasTime() ? 'Y-m-d H:i:s' : 'Y-m-d',
+            // Read in the app's timezone, as before: apply() moves it into the filter's.
+            'timezone' => config('app.timezone'),
+        ])->toDate($bound);
     }
 
     /**
