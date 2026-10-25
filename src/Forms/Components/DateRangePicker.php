@@ -97,17 +97,30 @@ class DateRangePicker extends Field
     {
         return [
             ...parent::getDefaultStateCasts(),
-            app($this->isSingleDate() ? DateStateCast::class : DateRangeStateCast::class, [
-                'format' => $this->getFormat(),
-                'internalFormat' => $this->getInternalFormat(),
-                'timezone' => $this->getTimezone(),
-            ]),
+            app($this->isSingleDate() ? DateStateCast::class : DateRangeStateCast::class, $this->getStateCastArguments()),
         ];
     }
 
+    /**
+     * @return array{format: string, internalFormat: string, timezone: string}
+     */
+    protected function getStateCastArguments(): array
+    {
+        return [
+            'format' => $this->getFormat(),
+            'internalFormat' => $this->getInternalFormat(),
+            // A day is the same day in every timezone: only a picker with time converts.
+            'timezone' => $this->hasTime() ? $this->getTimezone() : config('app.timezone'),
+        ];
+    }
+
+    /**
+     * The format of a date the server sets into the state. Without time it is
+     * the day alone, as the browser writes a picked one.
+     */
     public function getInternalFormat(): string
     {
-        return 'Y-m-d H:i:s';
+        return $this->hasTime() ? 'Y-m-d H:i:s' : 'Y-m-d';
     }
 
     public function defaultFormat(string|Closure $format): static
@@ -750,17 +763,32 @@ class DateRangePicker extends Field
         parent::dehydrateValidationRules($rules);
 
         $statePath = $this->getStatePath();
-
-        // A single date is a plain string: the required rule is enough.
-        if (! $this->isRequired() || $this->isSingleDate()) {
-            return;
-        }
-
         $label = $this->getLabel();
+        $cast = app(DateRangeStateCast::class, $this->getStateCastArguments());
 
         $rules[$statePath] = [
             ...$rules[$statePath] ?? [],
-            static function (string $attribute, mixed $value, Closure $fail) use ($label): void {
+            // The state cast reads what is no date as none: refuse it instead of saving none.
+            static function (string $attribute, mixed $value, Closure $fail) use ($cast): void {
+                $dates = is_array($value) ? [$value['start'] ?? null, $value['end'] ?? null] : [$value];
+
+                foreach ($dates as $date) {
+                    if (filled($date) && $cast->toDate($date) === null) {
+                        $fail('validation.date')->translate();
+
+                        return;
+                    }
+                }
+            },
+        ];
+
+        // A single date is a plain string: it has no ends to miss or to swap.
+        if ($this->isSingleDate()) {
+            return;
+        }
+
+        if ($this->isRequired()) {
+            $rules[$statePath][] = static function (string $attribute, mixed $value, Closure $fail) use ($label): void {
                 $message = __('filament-date-range::picker.validation.both_required', [
                     'label' => $label,
                 ]);
@@ -776,7 +804,29 @@ class DateRangePicker extends Field
                 if (blank($start) || blank($end)) {
                     $fail($message);
                 }
-            },
-        ];
+            };
+        }
+
+        $hasTime = $this->hasTime();
+
+        // By the day, or by the minute with time: the picker sets no seconds.
+        $rules[$statePath][] = static function (string $attribute, mixed $value, Closure $fail) use ($cast, $hasTime, $label): void {
+            $start = is_array($value) ? $cast->toDate($value['start'] ?? null) : null;
+            $end = is_array($value) ? $cast->toDate($value['end'] ?? null) : null;
+
+            if ($start === null || $end === null) {
+                return;
+            }
+
+            $endsBeforeStart = $hasTime
+                ? $end->startOfMinute()->lt($start->startOfMinute())
+                : $end->startOfDay()->lt($start->startOfDay());
+
+            if ($endsBeforeStart) {
+                $fail(__('filament-date-range::picker.validation.end_before_start', [
+                    'label' => $label,
+                ]));
+            }
+        };
     }
 }

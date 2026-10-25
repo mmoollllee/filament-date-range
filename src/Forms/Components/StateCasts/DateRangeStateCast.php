@@ -4,8 +4,10 @@ namespace CodeWithKyrian\FilamentDateRange\Forms\Components\StateCasts;
 
 use Carbon\CarbonInterface;
 use Carbon\Exceptions\InvalidFormatException;
+use DateTimeInterface;
 use Filament\Schemas\Components\StateCasts\Contracts\StateCast;
 use Illuminate\Support\Carbon;
+use ValueError;
 
 class DateRangeStateCast implements StateCast
 {
@@ -55,42 +57,92 @@ class DateRangeStateCast implements StateCast
         ];
     }
 
-    protected function hydrate(mixed $date): ?string
+    /**
+     * The date one end of the raw state holds — as the browser writes it
+     * (format) or as the server sets it (internal format) — in the app's
+     * timezone. Null when it holds none, or anything that is no date.
+     */
+    public function toDate(mixed $date): ?CarbonInterface
     {
-        if (blank($date)) {
+        $date = $this->parse($date, $this->format, $this->internalFormat);
+
+        if ($date === null) {
             return null;
         }
 
-        if (!$date instanceof CarbonInterface) {
-            $date = Carbon::parse($date);
-        }
-
         $date->shiftTimezone($this->timezone);
-        $date->setTimezone(config('app.timezone'));
 
-        return $date->format($this->format);
+        return $date->setTimezone(config('app.timezone'));
+    }
+
+    protected function hydrate(mixed $date): ?string
+    {
+        return $this->toDate($date)?->format($this->format);
     }
 
     protected function dehydrate(mixed $date): ?string
     {
+        $date = $this->parse($date, $this->format);
+
+        if ($date === null) {
+            return null;
+        }
+
+        $date = $date->setTimezone($this->timezone);
+
+        return $date->format($this->internalFormat);
+    }
+
+    /**
+     * Reads a date: an instance as a copy, a string in the first of the
+     * formats that fits — "!" sets what a format leaves out to zero, so a day
+     * is midnight, not the time of now — or else as Carbon parses it. A string
+     * that names no date of the calendar ("2026-02-30", "2026-13-45") is no
+     * date, never the one it would overflow into.
+     */
+    protected function parse(mixed $date, string ...$formats): ?Carbon
+    {
         if (blank($date)) {
             return null;
         }
 
-        if (!$date instanceof CarbonInterface) {
+        if ($date instanceof DateTimeInterface) {
+            return Carbon::instance($date);
+        }
+
+        if (!is_string($date)) {
+            return null;
+        }
+
+        foreach ($formats as $format) {
             try {
-                $date = Carbon::createFromFormat($this->format, (string) $date, config('app.timezone'));
-            } catch (InvalidFormatException $exception) {
-                try {
-                    $date = Carbon::parse($date, config('app.timezone'));
-                } catch (InvalidFormatException $exception) {
-                    return null;
-                }
+                $parsed = Carbon::createFromFormat('!' . $format, $date, config('app.timezone'));
+            } catch (InvalidFormatException | ValueError) {
+                continue;
+            }
+
+            if ($parsed !== null && !$this->hasParsingWarnings()) {
+                return $parsed;
             }
         }
 
-        $date =  $date->setTimezone($this->timezone);
+        try {
+            $parsed = Carbon::parse($date, config('app.timezone'));
+        } catch (InvalidFormatException) {
+            return null;
+        }
 
-        return $date->format($this->internalFormat);
+        return $this->hasParsingWarnings() ? null : $parsed;
+    }
+
+    /**
+     * Whether the last parse overflowed: PHP reads "2026-02-30" as March 2nd
+     * and only warns.
+     */
+    protected function hasParsingWarnings(): bool
+    {
+        $errors = Carbon::getLastErrors();
+
+        return is_array($errors) && ($errors['warning_count'] > 0 || $errors['error_count'] > 0);
     }
 }

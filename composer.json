@@ -23,6 +23,11 @@
 			"CodeWithKyrian\\FilamentDateRange\\": "src/"
 		}
 	},
+	"autoload-dev": {
+		"psr-4": {
+			"CodeWithKyrian\\FilamentDateRange\\Tests\\": "tests/"
+		}
+	},
 	"extra": {
 		"laravel": {
 			"providers": [

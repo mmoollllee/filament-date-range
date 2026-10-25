@@ -33,5 +33,6 @@ return [
     ],
     'validation' => [
         'both_required' => ':label erfordert sowohl Start- als auch Enddatum.',
+        'end_before_start' => ':label darf nicht vor dem Beginn enden.',
     ],
 ];

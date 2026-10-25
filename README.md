@@ -72,6 +72,8 @@ DateRangePicker::make('event_period')
 
 The field internally manages its state as an array with `start` and `end` keys, for example: `['start' => '2024-01-15', 'end' => '2024-01-20']`. How this state is persisted depends on your model and database structure.
 
+A day the server sets — a `default()`, `state()`, a form fill — enters the state just as the browser writes a picked one: as that day (`2024-01-15`), never with the current time of day.
+
 #### Storing as a Single JSON Attribute
 
 If you intend to store the date range in a single database column (e.g., a `json` column named `event_period`), ensure your Eloquent model casts this attribute to an `array` or `json`:
@@ -213,9 +215,10 @@ DateRangePicker::make('période')
 
 #### `timezone(string | Closure | null $timezone)`
 
-Specifies the timezone to be used for interpreting and processing dates. Defaults to your application's timezone (`config('app.timezone')`).
+Specifies the timezone to be used for interpreting and processing dates. Defaults to your application's timezone (`config('app.timezone')`). It applies to a picker `withTime()` only: without time, a day stays the same day in every timezone.
 ```php
 DateRangePicker::make('appointment_time')
+    ->withTime()
     ->timezone('America/New_York')
 ```
 
@@ -459,6 +462,10 @@ Disables the entire component, preventing any interaction.
 #### `required(bool | Closure $condition = true)`
 
 When required, both the start and end dates must be filled. If only one side is selected, validation will fail for the missing side.
+
+#### Validation
+
+Required or not, the field refuses a value that is no date of the calendar — `2024-02-30`, which PHP would read as March 1st, or any other text — instead of saving it as empty. In range mode it also refuses an end before the start: by the day, or by the minute with `withTime()`.
 
 #### Affixes (Prefixes & Suffixes)
 
